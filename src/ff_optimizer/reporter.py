@@ -66,8 +66,8 @@ def format_markdown_report(result: OptimizationResult) -> str:
             )
     lines.append("")
 
-    # Free Agent Upgrades
-    lines.append("## Recommended Free Agent Upgrades")
+    # Free Agent Upgrades (Starters)
+    lines.append("## Recommended Free Agent Upgrades (Starters)")
     lines.append("")
     if not result.free_agent_upgrades:
         lines.append("No available free agents are projected to outscore your optimal starters.")
@@ -88,6 +88,46 @@ def format_markdown_report(result: OptimizationResult) -> str:
                 f"| {up.slot} | {_fmt_player(up.free_agent)} | "
                 f"{up.free_agent.effective_projected_points:.1f} | "
                 f"{curr_label} | {curr_pts} | {up.point_gain:+.1f} | {drop_label} |"
+            )
+    lines.append("")
+
+    # Free Agent Upgrades (Bench)
+    lines.append("## Recommended Bench Upgrades")
+    lines.append("")
+    if not result.bench_upgrades:
+        lines.append("No same-position free agents are projected to upgrade your healthy bench.")
+    else:
+        lines.append(
+            "| Pos | Add Free Agent | Proj | Drop Bench Player | Proj | Gain |"
+        )
+        lines.append("| --- | --- | ---: | --- | ---: | ---: |")
+        for up in result.bench_upgrades:
+            bench_label = _fmt_player(up.current_player) if up.current_player else "—"
+            bench_pts = (
+                f"{up.current_player.effective_projected_points:.1f}"
+                if up.current_player
+                else "0.0"
+            )
+            lines.append(
+                f"| {up.position} | {_fmt_player(up.free_agent)} | "
+                f"{up.free_agent.effective_projected_points:.1f} | "
+                f"{bench_label} | {bench_pts} | {up.point_gain:+.1f} |"
+            )
+    lines.append("")
+
+    # High-Value Free Agents Spotlight (All Positions, RB/WR Priority)
+    lines.append("## High-Value Free Agents (All Positions — RB/WR Priority)")
+    lines.append("")
+    if not result.high_value_free_agents:
+        lines.append("No notable healthy free agents found.")
+    else:
+        lines.append("| Category | Pos | Player | Team | Proj | Rostered % | Note |")
+        lines.append("| --- | --- | --- | --- | ---: | ---: | --- |")
+        for item in result.high_value_free_agents:
+            p = item.player
+            lines.append(
+                f"| {item.category} | {p.position} | **{p.name}** | {p.pro_team} | "
+                f"{p.effective_projected_points:.1f} | {p.percent_owned:.0f}% | {item.note} |"
             )
     lines.append("")
 

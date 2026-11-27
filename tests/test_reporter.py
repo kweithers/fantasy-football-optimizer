@@ -34,7 +34,9 @@ def test_markdown_report_contains_all_sections_and_recommendations():
     assert "## Recommended Roster Swaps (Start / Sit)" in md
     assert "Baker Mayfield" in md
     assert "Chuba Hubbard" in md
-    assert "## Recommended Free Agent Upgrades" in md
+    assert "## Recommended Free Agent Upgrades (Starters)" in md
+    assert "## Recommended Bench Upgrades" in md
+    assert "## High-Value Free Agents (All Positions — RB/WR Priority)" in md
     assert "Brandon Aubrey" in md
     assert "## Optimal Starting Lineup (Current Roster)" in md
     assert "## Bench" in md
