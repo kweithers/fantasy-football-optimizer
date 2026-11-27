@@ -1,0 +1,69 @@
+name: Weekly Fantasy Football Lineup Optimizer
+
+on:
+  schedule:
+    # Every Wednesday at 14:00 UTC (9:00 AM EST / 10:00 AM EDT, after waivers clear)
+    - cron: "0 14 * * 3"
+  workflow_dispatch:
+    inputs:
+      week:
+        description: "Optional NFL week override (leave blank for current week)"
+        required: false
+        type: string
+      mock:
+        description: "Run with sample mock data (no ESPN credentials required)"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  optimize-lineup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: pip install .
+
+      - name: Generate weekly lineup report
+        env:
+          ESPN_LEAGUE_ID: ${{ secrets.ESPN_LEAGUE_ID }}
+          ESPN_YEAR: ${{ secrets.ESPN_YEAR }}
+          ESPN_TEAM_ID: ${{ secrets.ESPN_TEAM_ID }}
+          ESPN_TEAM_NAME: ${{ secrets.ESPN_TEAM_NAME }}
+          ESPN_S2: ${{ secrets.ESPN_S2 }}
+          ESPN_SWID: ${{ secrets.ESPN_SWID }}
+          MIN_POINT_GAIN: ${{ secrets.MIN_POINT_GAIN }}
+        run: |
+          ARGS=("--output" "report.md")
+          if [ "${{ inputs.mock }}" = "true" ]; then
+            ARGS+=("--mock")
+          fi
+          if [ -n "${{ inputs.week }}" ]; then
+            ARGS+=("--week" "${{ inputs.week }}")
+          fi
+          python -m ff_optimizer "${ARGS[@]}"
+
+      - name: Open GitHub Issue with weekly report
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "weekly-report" \
+            --color "0E8A16" \
+            --description "Weekly automated fantasy football lineup report" \
+            --force || true
+          TITLE=$(head -n 1 report.md | sed 's/^# //')
+          gh issue create \
+            --title "$TITLE" \
+            --body-file report.md \
+            --label "weekly-report"
