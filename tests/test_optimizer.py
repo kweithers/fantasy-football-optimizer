@@ -97,7 +97,8 @@ def test_questionable_starter_gets_warning_but_stays_eligible():
 
 def test_flex_slot_picks_highest_remaining_rb_wr_te():
     roster = _baseline_roster()
-    # Add a booming bench TE projected higher than Starter FLEX (12.0)
+    # Both TEs outscore Starter FLEX (12.0), so the second TE should start in FLEX
+    roster[5] = _p(6, "Starter TE", "TE", 13.5, slot="TE")
     roster.append(_p(13, "Bench TE", "TE", 15.5, slot="BE"))
 
     result = optimize_team("Test Team", week=8, roster=roster, free_agents_by_pos={})
