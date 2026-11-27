@@ -404,10 +404,11 @@ def find_bench_upgrades(
     exclude_fa_ids: Optional[Set[int]] = None,
     min_point_gain: float = 0.5,
 ) -> List[FreeAgentUpgrade]:
-    """Compare healthy, non-bye free agents against bench players at the same position.
+    """Compare healthy, non-bye free agents against bench players.
 
-    Skips healthy bench players who are merely on a 1-week bye (or in an IR slot)
-    so we don't recommend dropping a stashed starter.
+    Allows both same-position upgrades and cross-position upgrades into RB/WR
+    value-driver positions. Skips IR players, healthy players on a 1-week bye,
+    and widely rostered (>=75%) injured stars so stashed starters are protected.
     """
     used_fa_ids: Set[int] = set(exclude_fa_ids or ())
     upgrades: List[FreeAgentUpgrade] = []
@@ -424,19 +425,32 @@ def find_bench_upgrades(
     )
 
     for bench_player in eligible_bench:
-        pool = free_agents_by_pos.get(bench_player.position, ())
-        eligible_fas = [
-            fa for fa in pool
-            if not fa.is_unavailable
-            and fa.player_id not in rostered_ids
-            and fa.player_id not in used_fa_ids
-            and fa.effective_projected_points > 0
-        ]
+        candidate_positions = {bench_player.position} | VALUE_DRIVER_POSITIONS
+        seen_pool_ids: Set[int] = set()
+        eligible_fas: List[Player] = []
+        for pos in sorted(candidate_positions):
+            for fa in free_agents_by_pos.get(pos, ()):
+                if (
+                    fa.player_id in seen_pool_ids
+                    or fa.is_unavailable
+                    or fa.player_id in rostered_ids
+                    or fa.player_id in used_fa_ids
+                    or fa.effective_projected_points <= 0
+                ):
+                    continue
+                seen_pool_ids.add(fa.player_id)
+                eligible_fas.append(fa)
+
         if not eligible_fas:
             continue
 
         eligible_fas.sort(
-            key=lambda p: (-p.effective_projected_points, -p.percent_owned, p.name)
+            key=lambda p: (
+                -p.effective_projected_points,
+                0 if p.position in VALUE_DRIVER_POSITIONS else 1,
+                -p.percent_owned,
+                p.name,
+            )
         )
         best_fa = eligible_fas[0]
         gain = round(
@@ -447,6 +461,13 @@ def find_bench_upgrades(
             continue
 
         used_fa_ids.add(best_fa.player_id)
+        if best_fa.position == bench_player.position:
+            reason = f"Upgrades bench {bench_player.position} by +{gain:.1f} pts"
+        else:
+            reason = (
+                f"Cross-position upgrade ({bench_player.position} -> {best_fa.position}, "
+                f"+{gain:.1f} pts)"
+            )
         upgrades.append(
             FreeAgentUpgrade(
                 position=best_fa.position,
@@ -455,7 +476,7 @@ def find_bench_upgrades(
                 current_player=bench_player,
                 point_gain=gain,
                 suggested_drop=bench_player,
-                reason=f"Upgrades bench {bench_player.position} by +{gain:.1f} pts",
+                reason=reason,
             )
         )
 

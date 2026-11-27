@@ -194,6 +194,29 @@ def test_bench_upgrades_replace_weak_bench_but_skip_bye_stashes():
     )
 
 
+def test_bench_upgrades_allow_cross_position_rb_wr_swaps():
+    roster = _baseline_roster()
+    # Add a weak backup TE on the bench (5.0 pts)
+    roster.append(_p(15, "Backup TE", "TE", 5.0, slot="BE", owned=20.0))
+    free_agents = {
+        "RB": [_p(303, "High-Upside FA RB", "RB", 11.8, slot="FA", owned=68.0)],
+    }
+
+    result = optimize_team(
+        "Test Team", week=8, roster=roster, free_agents_by_pos=free_agents
+    )
+
+    te_swap = next(
+        (u for u in result.bench_upgrades if u.current_player and u.current_player.name == "Backup TE"),
+        None,
+    )
+    assert te_swap is not None
+    assert te_swap.free_agent.name == "High-Upside FA RB"
+    assert te_swap.position == "RB"
+    assert te_swap.point_gain == 6.8
+    assert "TE -> RB" in te_swap.reason
+
+
 def test_high_value_free_agents_prioritize_rb_wr_and_exclude_unavailable():
     roster = _baseline_roster()
     free_agents = {

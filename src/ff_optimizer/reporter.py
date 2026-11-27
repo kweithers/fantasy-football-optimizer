@@ -95,12 +95,12 @@ def format_markdown_report(result: OptimizationResult) -> str:
     lines.append("## Recommended Bench Upgrades")
     lines.append("")
     if not result.bench_upgrades:
-        lines.append("No same-position free agents are projected to upgrade your healthy bench.")
+        lines.append("No available free agents are projected to upgrade your healthy bench.")
     else:
         lines.append(
-            "| Pos | Add Free Agent | Proj | Drop Bench Player | Proj | Gain |"
+            "| Pos | Add Free Agent | Proj | Drop Bench Player | Proj | Gain | Note |"
         )
-        lines.append("| --- | --- | ---: | --- | ---: | ---: |")
+        lines.append("| --- | --- | ---: | --- | ---: | ---: | --- |")
         for up in result.bench_upgrades:
             bench_label = _fmt_player(up.current_player) if up.current_player else "—"
             bench_pts = (
@@ -111,7 +111,7 @@ def format_markdown_report(result: OptimizationResult) -> str:
             lines.append(
                 f"| {up.position} | {_fmt_player(up.free_agent)} | "
                 f"{up.free_agent.effective_projected_points:.1f} | "
-                f"{bench_label} | {bench_pts} | {up.point_gain:+.1f} |"
+                f"{bench_label} | {bench_pts} | {up.point_gain:+.1f} | {up.reason} |"
             )
     lines.append("")
 
