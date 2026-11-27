@@ -164,3 +164,60 @@ def test_empty_slot_filled_by_free_agent_when_no_bench_backup():
     assert len(result.free_agent_upgrades) == 1
     assert result.free_agent_upgrades[0].free_agent.name == "Stream K"
     assert result.free_agent_upgrades[0].point_gain == 8.5
+
+
+def test_bench_upgrades_replace_weak_bench_but_skip_bye_stashes():
+    roster = _baseline_roster()
+    # Add a star QB on a 1-week bye sitting on bench — should NOT be suggested as a drop
+    roster.append(_p(14, "Star Bye QB", "QB", 24.0, slot="BE", bye=True, owned=99.0))
+    free_agents = {
+        "WR": [_p(301, "Breakout FA WR", "WR", 11.5, slot="FA", owned=75.0)],
+        "QB": [_p(302, "Backup FA QB", "QB", 18.0, slot="FA", owned=50.0)],
+    }
+
+    result = optimize_team(
+        "Test Team", week=8, roster=roster, free_agents_by_pos=free_agents
+    )
+
+    # Bench WR (9.0) should be upgraded to Breakout FA WR (11.5)
+    wr_bench_up = next(
+        (u for u in result.bench_upgrades if u.position == "WR"), None
+    )
+    assert wr_bench_up is not None
+    assert wr_bench_up.free_agent.name == "Breakout FA WR"
+    assert wr_bench_up.current_player.name == "Bench WR"
+    assert wr_bench_up.point_gain == 2.5
+
+    # Star Bye QB should NOT be suggested as a bench drop (Bench QB at 16.0 can be upgraded though)
+    assert all(
+        u.current_player.name != "Star Bye QB" for u in result.bench_upgrades if u.current_player
+    )
+
+
+def test_high_value_free_agents_prioritize_rb_wr_and_exclude_unavailable():
+    roster = _baseline_roster()
+    free_agents = {
+        "QB": [_p(401, "Top FA QB", "QB", 21.0, slot="FA", owned=82.0)],
+        "RB": [
+            _p(402, "Top FA RB", "RB", 14.5, slot="FA", owned=78.0),
+            _p(403, "Injured FA RB", "RB", 16.0, slot="FA", injury="OUT", owned=85.0),
+        ],
+        "WR": [
+            _p(404, "Top FA WR", "WR", 15.0, slot="FA", owned=72.0),
+            _p(405, "Bye FA WR", "WR", 17.0, slot="FA", bye=True, owned=90.0),
+        ],
+        "TE": [_p(406, "Top FA TE", "TE", 11.0, slot="FA", owned=65.0)],
+    }
+
+    result = optimize_team(
+        "Test Team", week=8, roster=roster, free_agents_by_pos=free_agents
+    )
+
+    names = [h.player.name for h in result.high_value_free_agents]
+    assert "Injured FA RB" not in names
+    assert "Bye FA WR" not in names
+    # RB/WR value drivers appear first (highest projected WR then RB), followed by QB and TE
+    assert names[:2] == ["Top FA WR", "Top FA RB"]
+    assert "Top FA QB" in names
+    assert "Top FA TE" in names
+    assert result.high_value_free_agents[0].category == "Value Driver (RB/WR)"

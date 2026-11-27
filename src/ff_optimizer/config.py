@@ -24,6 +24,9 @@ FLEX_ELIGIBLE_POSITIONS: Set[str] = {"RB", "WR", "TE"}
 # Positions queried when scanning ESPN free agents
 FREE_AGENT_POSITIONS: Sequence[str] = ("QB", "RB", "WR", "TE", "D/ST", "K")
 
+# Primary value-driver positions emphasized in smaller leagues (e.g. 6-team leagues)
+VALUE_DRIVER_POSITIONS: Set[str] = {"RB", "WR"}
+
 # Non-starting roster slots in ESPN
 BENCH_SLOTS: Set[str] = {"BE", "IR"}
 

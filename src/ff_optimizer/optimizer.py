@@ -2,10 +2,15 @@
 
 from typing import Dict, List, Mapping, Optional, Sequence, Set, Tuple
 
-from ff_optimizer.config import DEFAULT_STARTING_SLOTS, FLEX_ELIGIBLE_POSITIONS
+from ff_optimizer.config import (
+    DEFAULT_STARTING_SLOTS,
+    FLEX_ELIGIBLE_POSITIONS,
+    VALUE_DRIVER_POSITIONS,
+)
 from ff_optimizer.models import (
     Alert,
     FreeAgentUpgrade,
+    HighValueFreeAgent,
     LineupSwap,
     OptimizationResult,
     Player,
@@ -392,6 +397,125 @@ def find_free_agent_upgrades(
     return upgrades
 
 
+def find_bench_upgrades(
+    bench: Sequence[Player],
+    rostered_ids: Set[int],
+    free_agents_by_pos: Mapping[str, Sequence[Player]],
+    exclude_fa_ids: Optional[Set[int]] = None,
+    min_point_gain: float = 0.5,
+) -> List[FreeAgentUpgrade]:
+    """Compare healthy, non-bye free agents against bench players at the same position.
+
+    Skips healthy bench players who are merely on a 1-week bye (or in an IR slot)
+    so we don't recommend dropping a stashed starter.
+    """
+    used_fa_ids: Set[int] = set(exclude_fa_ids or ())
+    upgrades: List[FreeAgentUpgrade] = []
+
+    eligible_bench = [
+        p for p in bench
+        if p.lineup_slot != "IR"
+        and not (p.on_bye_week and not p.is_injured_out)
+        and not (p.is_injured_out and p.percent_owned >= 75.0)
+    ]
+    # Evaluate weakest bench players first so the best FAs pair with the biggest upgrades
+    eligible_bench.sort(
+        key=lambda p: (p.effective_projected_points, p.percent_owned, p.name)
+    )
+
+    for bench_player in eligible_bench:
+        pool = free_agents_by_pos.get(bench_player.position, ())
+        eligible_fas = [
+            fa for fa in pool
+            if not fa.is_unavailable
+            and fa.player_id not in rostered_ids
+            and fa.player_id not in used_fa_ids
+            and fa.effective_projected_points > 0
+        ]
+        if not eligible_fas:
+            continue
+
+        eligible_fas.sort(
+            key=lambda p: (-p.effective_projected_points, -p.percent_owned, p.name)
+        )
+        best_fa = eligible_fas[0]
+        gain = round(
+            best_fa.effective_projected_points - bench_player.effective_projected_points,
+            2,
+        )
+        if gain < min_point_gain:
+            continue
+
+        used_fa_ids.add(best_fa.player_id)
+        upgrades.append(
+            FreeAgentUpgrade(
+                position=best_fa.position,
+                slot="BE",
+                free_agent=best_fa,
+                current_player=bench_player,
+                point_gain=gain,
+                suggested_drop=bench_player,
+                reason=f"Upgrades bench {bench_player.position} by +{gain:.1f} pts",
+            )
+        )
+
+    upgrades.sort(key=lambda u: -u.point_gain)
+    return upgrades
+
+
+def find_high_value_free_agents(
+    rostered_ids: Set[int],
+    free_agents_by_pos: Mapping[str, Sequence[Player]],
+    per_pos_limits: Optional[Mapping[str, int]] = None,
+    max_total: int = 8,
+) -> List[HighValueFreeAgent]:
+    """Highlight top available free agents across all positions, emphasizing RB/WR."""
+    limits = per_pos_limits or {
+        "RB": 3,
+        "WR": 3,
+        "QB": 1,
+        "TE": 1,
+        "D/ST": 1,
+        "K": 1,
+    }
+    seen_ids: Set[int] = set()
+    highlights: List[HighValueFreeAgent] = []
+
+    for pos, limit in limits.items():
+        pool = [
+            fa for fa in free_agents_by_pos.get(pos, ())
+            if not fa.is_unavailable
+            and fa.player_id not in rostered_ids
+            and fa.player_id not in seen_ids
+            and fa.effective_projected_points > 0
+        ]
+        pool.sort(key=lambda p: (-p.effective_projected_points, -p.percent_owned, p.name))
+
+        for fa in pool[:limit]:
+            seen_ids.add(fa.player_id)
+            is_driver = fa.position in VALUE_DRIVER_POSITIONS
+            category = "Value Driver (RB/WR)" if is_driver else f"Top {fa.position}"
+            if fa.percent_owned >= 70.0:
+                note = f"Widely rostered ({fa.percent_owned:.0f}% owned)"
+            elif is_driver:
+                note = "High-upside RB/WR depth"
+            else:
+                note = f"Top available {fa.position} this week"
+            highlights.append(
+                HighValueFreeAgent(player=fa, category=category, note=note)
+            )
+
+    highlights.sort(
+        key=lambda h: (
+            0 if h.player.position in VALUE_DRIVER_POSITIONS else 1,
+            -h.player.effective_projected_points,
+            -h.player.percent_owned,
+            h.player.name,
+        )
+    )
+    return highlights[:max_total]
+
+
 def optimize_team(
     team_name: str,
     week: int,
@@ -410,6 +534,20 @@ def optimize_team(
         bench=bench,
         free_agents_by_pos=free_agents_by_pos,
         min_point_gain=min_point_gain,
+    )
+
+    rostered_ids = {p.player_id for p in roster}
+    starter_upgrade_fa_ids = {u.free_agent.player_id for u in fa_upgrades}
+    bench_upgrades = find_bench_upgrades(
+        bench=bench,
+        rostered_ids=rostered_ids,
+        free_agents_by_pos=free_agents_by_pos,
+        exclude_fa_ids=starter_upgrade_fa_ids,
+        min_point_gain=min_point_gain,
+    )
+    high_value_fas = find_high_value_free_agents(
+        rostered_ids=rostered_ids,
+        free_agents_by_pos=free_agents_by_pos,
     )
 
     current_total = round(
@@ -442,6 +580,8 @@ def optimize_team(
         alerts=alerts,
         swaps=swaps,
         free_agent_upgrades=fa_upgrades,
+        bench_upgrades=bench_upgrades,
+        high_value_free_agents=high_value_fas,
         current_projected_total=current_total,
         optimal_projected_total=optimal_total,
         with_fa_projected_total=with_fa_total,

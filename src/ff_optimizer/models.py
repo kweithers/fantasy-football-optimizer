@@ -106,7 +106,7 @@ class LineupSwap:
 
 @dataclass(frozen=True)
 class FreeAgentUpgrade:
-    """Recommended free agent pickup projected to outscore a rostered starter."""
+    """Recommended free agent pickup projected to outscore a rostered player."""
 
     position: str
     slot: str
@@ -115,6 +115,15 @@ class FreeAgentUpgrade:
     point_gain: float
     suggested_drop: Optional[Player]
     reason: str
+
+
+@dataclass(frozen=True)
+class HighValueFreeAgent:
+    """Notable high-value available free agent across any position."""
+
+    player: Player
+    category: str  # e.g. "Value Driver (RB/WR)" or "Top Available"
+    note: str
 
 
 @dataclass
@@ -129,6 +138,8 @@ class OptimizationResult:
     alerts: List[Alert] = field(default_factory=list)
     swaps: List[LineupSwap] = field(default_factory=list)
     free_agent_upgrades: List[FreeAgentUpgrade] = field(default_factory=list)
+    bench_upgrades: List[FreeAgentUpgrade] = field(default_factory=list)
+    high_value_free_agents: List[HighValueFreeAgent] = field(default_factory=list)
     current_projected_total: float = 0.0
     optimal_projected_total: float = 0.0
     with_fa_projected_total: float = 0.0
