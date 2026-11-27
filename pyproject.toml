@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fantasy-football-optimizer"
+version = "0.1.0"
+description = "Weekly ESPN Fantasy Football lineup optimizer and free-agent upgrade reporter"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "espn-api>=0.38.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+]
+
+[project.scripts]
+ff-optimizer = "ff_optimizer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
